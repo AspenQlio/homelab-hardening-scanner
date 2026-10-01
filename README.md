@@ -8,35 +8,30 @@
 
 *An automated SecOps auditing tool to verify the security posture of Linux servers.*
 
+<img src="assets/screenshot.svg" width="800" alt="Scanner Output">
+
 </div>
 
 ## 📌 Overview
 
-**Homelab Hardening Scanner** is a read-only configuration auditor designed to assess the security baseline of Linux machines (such as Raspberry Pi home servers, VPS, or bare-metal setups). By applying Zero-Trust principles to local infrastructure, this tool programmatically inspects critical configuration files and reports compliance against strict security rules (Pass, Fail, or Warning).
+**Homelab Hardening Scanner** is a read-only configuration auditor for Linux machines (like a Raspberry Pi home server, VPS, or bare-metal setup). I built this tool to put my cybersecurity certification into practice through automation. 
 
-This project was built to empirically demonstrate applied cybersecurity principles in an automated, programmatic way.
+Instead of checking server configurations by hand, this script inspects critical files and tells you exactly what passes, what fails, and what needs a warning based on standard security baselines.
 
 ## 🚀 Core Features
 
-- **🔒 SSH Posture Audit:** Inspects `/etc/ssh/sshd_config` to enforce strict access rules (e.g., `PermitRootLogin no`, `PasswordAuthentication no`, explicit allowed groups).
-- **🧱 Firewall Validation:** Verifies that a firewall (such as `ufw` or `iptables`) is actively running with a default `DROP` policy for inbound connections.
-- **👥 User & Privilege Audit:** Safely reads `/etc/shadow` to detect active accounts missing passwords, and maps out all users belonging to privileged groups (`sudo` or `wheel`).
-- **📊 Multi-format Reporting:** Generates beautiful, human-readable terminal output using `rich`, and can export results to standard `JSON` or `Markdown` for programmatic ingestion or CI/CD pipelines.
+- **🔒 SSH Posture Audit:** Checks `/etc/ssh/sshd_config` to ensure strict access rules are in place (like `PermitRootLogin no` and `PasswordAuthentication no`).
+- **🧱 Firewall Validation:** Verifies if a firewall (`ufw` or `iptables`) is actually running and dropping inbound traffic by default.
+- **👥 User & Privilege Audit:** Safely parses `/etc/shadow` to find active accounts missing passwords, and lists users with `sudo` or `wheel` access.
+- **📊 Multi-format Reporting:** Prints a clean terminal UI using `rich`. Future updates will include JSON and Markdown exports for CI/CD pipelines.
 
 ## 🛠️ Tech Stack
 
 - **Python 3.11+**
-- **[Pydantic](https://docs.pydantic.dev/):** Used to define rigid, type-safe data models for security rules and compliance reports.
-- **[Rich](https://rich.readthedocs.io/):** Powers the elegant, color-coded terminal user interface (TUI).
-- **[uv](https://github.com/astral-sh/uv):** Provides strict and lightning-fast Python dependency management.
-
-## 🏗️ Architecture & Modules
-
-1. `ssh_auditor.py`: Parses the OpenSSH daemon configuration.
-2. `firewall_auditor.py`: Queries firewall state and default policies.
-3. `user_auditor.py`: Audits local authentication and privilege escalation vectors.
-4. `reporter.py`: Aggregates the findings from all auditors into a structured compliance report.
+- **[Pydantic](https://docs.pydantic.dev/):** For strict data models.
+- **[Rich](https://rich.readthedocs.io/):** For the terminal interface and color-coded tables.
+- **[uv](https://github.com/astral-sh/uv):** For fast dependency management.
 
 ## 🚧 Status
 
-This project is currently in active development. The base architecture, dependency management (`pyproject.toml` / `uv.lock`), and module structure are initialized. Parsing logic and compliance engines are currently being implemented.
+This project is currently in active development. The base architecture, dependency management, and the SSH auditing module are done. Parsing logic for the firewall and user permissions is coming next.
