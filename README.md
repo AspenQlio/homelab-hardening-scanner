@@ -1,44 +1,56 @@
-<div align="center">
-
 # Homelab Hardening Scanner
 
-![Python](https://img.shields.io/badge/Python-3.11%2B-111820?style=for-the-badge&logo=python&logoColor=c9d1d9)
-![Security](https://img.shields.io/badge/Security-SecOps-161b22?style=for-the-badge&logo=linux&logoColor=c9d1d9)
-![Status](https://img.shields.io/badge/Status-MVP_Ready-8b949e?style=for-the-badge)
+> An automated SecOps auditing tool designed to verify the security posture of Linux servers against standard security baselines.
 
-*An automated SecOps auditing tool to verify the security posture of Linux servers.*
+Homelab Hardening Scanner is a read-only configuration auditor for Linux machines (like a Raspberry Pi home server, VPS, or bare-metal setup). It inspects critical files and provides a clear report of what passes, what fails, and what needs attention to keep your homelab secure.
 
-<img src="assets/screenshot.svg" width="800" alt="Scanner Output">
+## Features
 
-</div>
+- **SSH Posture Audit:** Verifies strict access rules in `/etc/ssh/sshd_config` (e.g., `PermitRootLogin no`).
+- **Firewall Validation:** Checks if a firewall (`ufw` or `iptables`) is active and dropping inbound traffic by default.
+- **User & Privilege Audit:** Parses account databases to review `sudo` membership, interactive accounts, and `/etc/sudoers` permissions.
+- **Docker Audit:** Reviews root-equivalent group access, privileged containers, and daemon port exposure.
+- **System Health Audit:** Detects pending system updates and reboot markers.
+- **Markdown Reporting:** Provides a clean terminal UI and exports portable audit reports.
 
-## Overview
+## Architecture
 
-**Homelab Hardening Scanner** is a read-only configuration auditor for Linux machines (like a Raspberry Pi home server, VPS, or bare-metal setup). I built this tool to put my cybersecurity certification into practice through automation. 
-
-Instead of checking server configurations by hand, this script inspects critical files and tells you exactly what passes, what fails, and what needs a warning based on standard security baselines.
-
-## Core Features
-
-- **SSH Posture Audit:** Checks `/etc/ssh/sshd_config` to ensure strict access rules are in place (like `PermitRootLogin no` and `PasswordAuthentication no`).
-- **Firewall Validation:** Verifies if a firewall (`ufw` or `iptables`) is actually running and dropping inbound traffic by default.
-- **User & Privilege Audit:** Safely parses account databases, identifies interactive system accounts with active passwords, reviews `sudo` or `wheel` membership, and validates `/etc/sudoers` permissions.
-- **Docker Audit:** Reviews root-equivalent group access, privileged containers, and exposure of the unencrypted daemon port.
-- **System Health Audit:** Detects pending Arch or Debian-family updates and reboot markers.
-- **Markdown Reporting:** Prints a clean terminal UI and exports portable audit reports.
+The tool executes read-only checks across the local system. It relies on Python and Pydantic for strict data modeling and rule validation. The results are formatted using Rich for a terminal interface and can be exported as a Markdown file.
 
 ## Tech Stack
 
-- **Python 3.11+**
-- **[Pydantic](https://docs.pydantic.dev/):** For strict data models.
-- **[Rich](https://rich.readthedocs.io/):** For the terminal interface and color-coded tables.
-- **[uv](https://github.com/astral-sh/uv):** For fast dependency management.
+- **Language:** Python 3.11+
+- **Data Modeling:** Pydantic
+- **UI:** Rich
+- **Package Manager:** uv
+
+## Getting Started
+
+### Prerequisites
+
+- Python 3.11 or higher installed on the target machine.
+- `uv` installed for dependency management.
+
+### Installation
+
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/AspenQlio/homelab-hardening-scanner.git
+   cd homelab-hardening-scanner
+   ```
+2. **Sync dependencies:**
+   ```bash
+   uv sync
+   ```
 
 ## Usage
 
+Run the scanner to generate an audit report. Note that access to certain system files (like `/etc/shadow` or firewall states) may require elevated privileges.
+
 ```bash
-uv sync
 uv run homelab-scanner scan --report audit.md
 ```
 
-All checks are read-only. Access to `/etc/shadow`, Docker, or firewall state can require elevated permissions.
+## License
+
+This project is licensed under the MIT License.
