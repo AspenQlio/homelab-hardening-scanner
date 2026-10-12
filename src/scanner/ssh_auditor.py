@@ -1,88 +1,61 @@
-import os
-from .models import AuditFinding, AuditStatus
+"""OpenSSH server hardening checks."""
 
+from dataclasses import dataclass
+from pathlib import Path
+
+from scanner.models import AuditFinding, AuditStatus
+
+
+@dataclass(frozen=True, slots=True)
 class SSHAuditor:
-    def __init__(self, config_path: str = "/etc/ssh/sshd_config"):
-        self.config_path = config_path
+    """Audits effective directives from a local sshd configuration file."""
 
-    def audit(self) -> list[AuditFinding]:
-        findings = []
-        
-        if not os.path.exists(self.config_path):
-            findings.append(AuditFinding(
-                module="SSH",
-                check_name="Config File Exists",
-                status=AuditStatus.ERROR,
-                details=f"Could not find {self.config_path}",
-                remediation="Ensure OpenSSH server is installed."
-            ))
-            return findings
+    config_path: Path = Path("/etc/ssh/sshd_config")
 
-        # Read config ignoring comments and empty lines
-        config = {}
+    def audit(self) -> tuple[AuditFinding, ...]:
+        """Returns root-login and password-authentication findings."""
         try:
-            with open(self.config_path, "r") as f:
-                for line in f:
-                    line = line.strip()
-                    if not line or line.startswith("#"):
-                        continue
-                    parts = line.split()
-                    if len(parts) >= 2:
-                        key = parts[0].lower()
-                        val = parts[1].lower()
-                        config[key] = val
-        except PermissionError:
-            findings.append(AuditFinding(
-                module="SSH",
-                check_name="Read Permissions",
-                status=AuditStatus.ERROR,
-                details=f"Permission denied reading {self.config_path}",
-                remediation="Run the scanner with elevated privileges."
-            ))
-            return findings
+            config = self._parse(self.config_path.read_text(encoding="utf-8"))
+        except (FileNotFoundError, PermissionError) as error:
+            return (
+                AuditFinding(
+                    module="SSH",
+                    check_name="Configuration readable",
+                    status=AuditStatus.ERROR,
+                    details=str(error),
+                    remediation="Install OpenSSH server or grant read permission.",
+                ),
+            )
 
-        # Check 1: Root Login
-        permit_root = config.get("permitrootlogin", "prohibit-password") # Default in modern SSH
-        if permit_root == "yes":
-            findings.append(AuditFinding(
+        root_login = config.get("permitrootlogin", "prohibit-password")
+        password_auth = config.get("passwordauthentication", "yes")
+        return (
+            AuditFinding(
                 module="SSH",
-                check_name="Root Login Disabled",
-                status=AuditStatus.FAIL,
-                details="PermitRootLogin is set to 'yes'.",
-                remediation="Set 'PermitRootLogin no' in sshd_config."
-            ))
-        elif permit_root == "prohibit-password":
-            findings.append(AuditFinding(
+                check_name="Root login disabled",
+                status=AuditStatus.PASS if root_login == "no" else AuditStatus.FAIL,
+                details=f"PermitRootLogin is {root_login}.",
+                remediation="Set PermitRootLogin no." if root_login != "no" else None,
+            ),
+            AuditFinding(
                 module="SSH",
-                check_name="Root Login Disabled",
-                status=AuditStatus.WARNING,
-                details="PermitRootLogin is 'prohibit-password'. Keys are required, but 'no' is safer.",
-                remediation="Set 'PermitRootLogin no' if root SSH is not strictly needed."
-            ))
-        else:
-            findings.append(AuditFinding(
-                module="SSH",
-                check_name="Root Login Disabled",
-                status=AuditStatus.PASS,
-                details=f"PermitRootLogin is securely set to '{permit_root}'."
-            ))
+                check_name="Key-only authentication",
+                status=AuditStatus.PASS if password_auth == "no" else AuditStatus.FAIL,
+                details=f"PasswordAuthentication is {password_auth}.",
+                remediation="Set PasswordAuthentication no after testing SSH keys."
+                if password_auth != "no"
+                else None,
+            ),
+        )
 
-        # Check 2: Password Authentication
-        pass_auth = config.get("passwordauthentication", "yes")
-        if pass_auth == "yes":
-            findings.append(AuditFinding(
-                module="SSH",
-                check_name="Key-Based Auth Only",
-                status=AuditStatus.FAIL,
-                details="PasswordAuthentication is enabled. Vulnerable to brute-force.",
-                remediation="Setup SSH keys and set 'PasswordAuthentication no'."
-            ))
-        else:
-            findings.append(AuditFinding(
-                module="SSH",
-                check_name="Key-Based Auth Only",
-                status=AuditStatus.PASS,
-                details="PasswordAuthentication is disabled."
-            ))
-
-        return findings
+    @staticmethod
+    def _parse(content: str) -> dict[str, str]:
+        directives: dict[str, str] = {}
+        for raw_line in content.splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#"):
+                continue
+            key, separator, value = line.partition(" ")
+            if separator:
+                directives[key.lower()] = value.split()[0].lower()
+        return directives
