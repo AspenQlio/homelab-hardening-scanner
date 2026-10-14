@@ -15,18 +15,41 @@ class FirewallAuditor:
     def audit(self) -> tuple[AuditFinding, ...]:
         """Returns findings for the first supported firewall backend."""
         if self.runner.available("ufw"):
-            return self._audit_ufw()
-        if self.runner.available("firewall-cmd"):
-            return self._audit_firewalld()
-        if self.runner.available("iptables"):
-            return self._audit_iptables()
+            findings = self._audit_ufw()
+        elif self.runner.available("firewall-cmd"):
+            findings = self._audit_firewalld()
+        elif self.runner.available("iptables"):
+            findings = self._audit_iptables()
+        else:
+            findings = (
+                AuditFinding(
+                    module="Firewall",
+                    check_name="Firewall backend",
+                    status=AuditStatus.FAIL,
+                    details="No supported firewall backend was found.",
+                    remediation="Install and enable UFW, firewalld, or iptables.",
+                ),
+            )
+        return findings + self._audit_dangerous_ports()
+
+    def _audit_dangerous_ports(self) -> tuple[AuditFinding, ...]:
+        if not self.runner.available("ss"):
+            return ()
+        result = self.runner.run(("ss", "-lntH"))
+        dangerous = tuple(
+            port
+            for port in (21, 23)
+            if any(address.rsplit(":", 1)[-1] == str(port) for address in result.stdout.split())
+        )
         return (
             AuditFinding(
                 module="Firewall",
-                check_name="Firewall backend",
-                status=AuditStatus.FAIL,
-                details="No supported firewall backend was found.",
-                remediation="Install and enable UFW, firewalld, or iptables.",
+                check_name="Dangerous listening ports",
+                status=AuditStatus.FAIL if dangerous else AuditStatus.PASS,
+                details=(
+                    f"Dangerous TCP ports listening: {', '.join(map(str, dangerous)) or 'none'}."
+                ),
+                remediation="Disable plaintext FTP and Telnet services." if dangerous else None,
             ),
         )
 
