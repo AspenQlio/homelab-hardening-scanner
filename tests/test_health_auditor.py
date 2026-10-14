@@ -8,7 +8,10 @@ def test_health_warns_when_arch_updates_are_pending() -> None:
     # Given
     runner = FakeRunner(
         available_commands={"pacman"},
-        results={("pacman", "-Qu"): CommandResult(0, "linux 6.1 -> 6.2\n", "")},
+        results={
+            ("pacman", "-Qu"): CommandResult(0, "linux 6.1 -> 6.2\n", ""),
+            ("pacman", "-Qtdq"): CommandResult(0, "unused-library\n", ""),
+        },
     )
 
     # When
@@ -16,3 +19,4 @@ def test_health_warns_when_arch_updates_are_pending() -> None:
 
     # Then
     assert findings[0].status is AuditStatus.WARNING
+    assert findings[2].status is AuditStatus.WARNING
