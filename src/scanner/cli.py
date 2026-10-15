@@ -22,6 +22,11 @@ from scanner.system import SystemCommandRunner
 app = typer.Typer(add_completion=False)
 
 
+@app.callback()
+def root() -> None:
+    """Audit Linux security posture without changing the system."""
+
+
 def _docker_members() -> tuple[str, ...]:
     try:
         return tuple(sorted(grp.getgrnam("docker").gr_mem))
