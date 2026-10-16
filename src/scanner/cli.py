@@ -1,49 +1,84 @@
+"""Command-line entry point for the security scanner."""
+
+import grp
+import os
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Annotated
+
+import typer
 from rich.console import Console
 from rich.table import Table
-from rich.panel import Panel
-from .models import AuditStatus
-from .ssh_auditor import SSHAuditor
 
-def get_status_color(status: AuditStatus) -> str:
-    if status == AuditStatus.PASS:
-        return "[bold green]PASS[/bold green]"
-    elif status == AuditStatus.FAIL:
-        return "[bold red]FAIL[/bold red]"
-    elif status == AuditStatus.WARNING:
-        return "[bold yellow]WARN[/bold yellow]"
-    return "[bold magenta]ERROR[/bold magenta]"
+from scanner.docker_auditor import DockerAuditor
+from scanner.firewall_auditor import FirewallAuditor
+from scanner.health_auditor import HealthAuditor
+from scanner.identity_auditor import IdentityAuditor
+from scanner.models import AuditFinding, AuditStatus
+from scanner.reporter import render_markdown
+from scanner.ssh_auditor import SSHAuditor
+from scanner.system import SystemCommandRunner
 
-def main():
-    console = Console()
-    console.print(Panel.fit("[bold blue]Homelab Hardening Scanner[/bold blue]", border_style="blue"))
-    
-    with console.status("[bold cyan]Auditing system configuration...[/bold cyan]"):
-        ssh = SSHAuditor()
-        findings = ssh.audit()
-    
-    table = Table(title="Security Audit Results", show_header=True, header_style="bold magenta")
-    table.add_column("Module", style="cyan", width=10)
-    table.add_column("Check", style="white", width=25)
-    table.add_column("Status", justify="center", width=10)
-    table.add_column("Details", style="dim", width=40)
-    
-    fail_count = 0
+app = typer.Typer(add_completion=False)
+
+
+def _docker_members() -> tuple[str, ...]:
+    try:
+        return tuple(sorted(grp.getgrnam("docker").gr_mem))
+    except KeyError:
+        return ()
+
+
+def _collect_findings() -> tuple[AuditFinding, ...]:
+    runner = SystemCommandRunner()
+    auditors = (
+        SSHAuditor(),
+        FirewallAuditor(runner),
+        IdentityAuditor(),
+        DockerAuditor(runner, _docker_members(), os.getenv("DOCKER_HOST", "")),
+        HealthAuditor(runner, Path("/var/run/reboot-required").exists()),
+    )
+    return tuple(finding for auditor in auditors for finding in auditor.audit())
+
+
+def _render_terminal(findings: tuple[AuditFinding, ...]) -> None:
+    table = Table(title="Homelab Security Audit")
+    table.add_column("Module")
+    table.add_column("Check")
+    table.add_column("Status")
+    table.add_column("Details")
     for finding in findings:
+        style = {
+            AuditStatus.PASS: "green",
+            AuditStatus.FAIL: "red",
+            AuditStatus.WARNING: "yellow",
+            AuditStatus.ERROR: "magenta",
+        }[finding.status]
         table.add_row(
-            finding.module,
-            finding.check_name,
-            get_status_color(finding.status),
-            finding.details
+            finding.module, finding.check_name, f"[{style}]{finding.status.value}", finding.details
         )
-        if finding.status == AuditStatus.FAIL:
-            fail_count += 1
+    Console().print(table)
 
-    console.print(table)
-    
-    if fail_count > 0:
-        console.print(f"\n[bold red]! Found {fail_count} critical security vulnerabilities. Review remediations.[/bold red]")
-    else:
-        console.print("\n[bold green]OK: System passes baseline security checks![/bold green]")
+
+@app.command()
+def scan(
+    report: Annotated[
+        Path | None,
+        typer.Option("--report", help="Write a Markdown report to this path."),
+    ] = None,
+) -> None:
+    """Runs every read-only security audit."""
+    findings = _collect_findings()
+    _render_terminal(findings)
+    if report is not None:
+        _ = report.write_text(render_markdown(findings), encoding="utf-8")
+
+
+def main() -> None:
+    """Starts the Typer application."""
+    app()
+
 
 if __name__ == "__main__":
-    main()
+    default_report = Path(f"audit_{datetime.now(tz=UTC):%Y%m%d}.md")
+    scan(default_report)
