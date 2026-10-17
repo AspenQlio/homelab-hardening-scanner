@@ -16,6 +16,7 @@ class HealthAuditor:
     def audit(self) -> tuple[AuditFinding, ...]:
         """Returns update and reboot findings for the detected package manager."""
         updates = self._pending_updates()
+        orphaned = self._orphaned_packages()
         return (
             AuditFinding(
                 module="Health",
@@ -33,6 +34,13 @@ class HealthAuditor:
                 else "No reboot marker exists.",
                 remediation="Schedule a controlled reboot." if self.reboot_required else None,
             ),
+            AuditFinding(
+                module="Health",
+                check_name="Orphaned packages",
+                status=AuditStatus.WARNING if orphaned else AuditStatus.PASS,
+                details=f"{len(orphaned)} orphaned packages were found.",
+                remediation="Review and remove unneeded orphaned packages." if orphaned else None,
+            ),
         )
 
     def _pending_updates(self) -> tuple[str, ...]:
@@ -42,4 +50,10 @@ class HealthAuditor:
             result = self.runner.run(("apt-get", "--just-print", "upgrade"))
         else:
             return ()
+        return tuple(line for line in result.stdout.splitlines() if line.strip())
+
+    def _orphaned_packages(self) -> tuple[str, ...]:
+        if not self.runner.available("pacman"):
+            return ()
+        result = self.runner.run(("pacman", "-Qtdq"))
         return tuple(line for line in result.stdout.splitlines() if line.strip())
